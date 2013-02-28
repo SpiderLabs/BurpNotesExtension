@@ -32,11 +32,14 @@ interface
 from source, then click "Open".
 5. Click "Next" to load the plugin.
 
-Within the Notes tab, there are four options:
+Within the Notes tab, you can:
 - Save Notes: Save any currently open documents to a file.
 - Load Notes: Load a previously saved set of notes from a file.
-- Add Text: Add a tab with a new text document.
-- Add Spreadsheet: Add a tab with a new spreadsheet.
+- New Text: Add a tab with a new text document.
+- Import Text: Load the contents of a text document.
+- New Spreadsheet: Add a tab with a new spreadsheet.
+- Import Spreadsheet: Load the contents of a CSV document. 
+- You can also export individual notes tabs to an external file. 
 
 From other tabs in Burp, right clicking in areas where a user can normally
 interact with HTTP Responses and Requests, such as the Proxy History or Site Map

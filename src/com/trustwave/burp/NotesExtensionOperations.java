@@ -16,6 +16,8 @@ import java.awt.Component;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.FileReader;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -24,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
@@ -47,17 +50,26 @@ public class NotesExtensionOperations{
     public IExtensionHelpers helpers;
     public PrintWriter stdout, errout;
     public JTabbedPane tabbedPane;
-    public JButton btnAddText, btnAddSpreadsheet, btnLoadNotes, btnSaveNotes;
+    public JComboBox tabList;
+    public JButton btnAddText, btnAddSpreadsheet, btnImportText, btnImportSpreadsheet, btnLoadNotes, btnSaveNotes, btnSaveTabAsTemplate, btnRemoveTab;
     public HashMap<String,String> tabTypes;
     public IHttpRequestResponse[] messages;
     public byte selectedContext;
+    public ArrayList<String[]> spreadsheetTemplateFile;
+    public String textTemplateFile;
 
     //KEYWORDS
     public static final String COMMAND_ADD_TEXT = "addText";
     public static final String COMMAND_ADD_SPREADSHEET = "addSpreadsheet";
+    public static final String COMMAND_IMPORT_TEXT = "importText";
+    public static final String COMMAND_IMPORT_SPREADSHEET = "importSpreadsheet";
     public static final String COMMAND_LOAD_NOTES = "loadNotes";
     public static final String COMMAND_SAVE_NOTES = "saveNotes";
     public static final String COMMAND_ADD_NEW_TEXT = "newTextDoc";
+    public static final String COMMAND_SAVE_TAB_AS_TEMPLATE = "saveTabAsTemplate";
+    public static final String COMMAND_REMOVE_TAB = "removeTab";
+    public static final int TEMPLATE_TEXT = 1;
+    public static final int TEMPLATE_SPREADSHEET = 2;
     
     //Constructor
     /**
@@ -75,8 +87,9 @@ public class NotesExtensionOperations{
      * @param saveFile True - Show a Save Dialog. False - Show a Load Dialog.
      * @return The File chosen by the user.
      */
-	public File GetFileFromDialog(boolean saveFile){
+	public File GetFileFromDialog(boolean saveFile, String defaultName){
 		JFileChooser fc = new JFileChooser();
+		if(defaultName != "") fc.setSelectedFile(new File(defaultName));
 		int returnVal;
 		if(saveFile) returnVal = fc.showSaveDialog(tabbedPane);
 		else returnVal = fc.showOpenDialog(tabbedPane);
@@ -110,7 +123,7 @@ public class NotesExtensionOperations{
 		ArrayList<String[]> data = GetNotesData();
 		if(data.size() > 0) {
 			File f;
-			if((f = GetFileFromDialog(true)) != null){
+			if((f = GetFileFromDialog(true, "notes.txt")) != null){
 				try{
 					//Create our various Writers
 					FileWriter fw = new FileWriter(f);
@@ -135,7 +148,7 @@ public class NotesExtensionOperations{
 		//Now pick file to load
 		File file;
 		try {
-			if((file = GetFileFromDialog(false)) != null){
+			if((file = GetFileFromDialog(false, "")) != null){
 				ArrayList<String[]> spreadData = new ArrayList<String[]>();
 				if(file.exists() && file.isFile() && file.canRead()){
 						CSVReader reader = new CSVReader(new FileReader(file));
@@ -232,6 +245,7 @@ public class NotesExtensionOperations{
 					//Start text object
 					inText = true;
 					inTitle = true;
+					current = "";
 				} else if(nextLine[j].equals("ENDTEXT")){
 					//End of text object, create the new textArea and add the tab
 					inText = false;
@@ -260,7 +274,7 @@ public class NotesExtensionOperations{
 						inTitle = false;
 					} else {
 						spreadData.add(nextLine);
-						i = nextLine.length; //End this loop early, we are taking the whole line
+						j = nextLine.length; //End this loop early, we are taking the whole line
 					}
 				}
 			}
@@ -285,8 +299,10 @@ public class NotesExtensionOperations{
 	/**
 	 * Add a blank text tab to the Tabbed Pane. Will prompt the user for a name.
 	 */
-	public void AddTextTab(){
-		AddTextTab("");
+	public void AddTextTab(boolean importFile){
+		if(importFile) promptUseTemplate(TEMPLATE_TEXT);
+		if(textTemplateFile != null) AddTextTab(textTemplateFile);
+		else AddTextTab("");
 	}
 	
 	/**
@@ -309,6 +325,8 @@ public class NotesExtensionOperations{
 		//Create a JTextArea for displaying plain text
 		JTextArea newText = new JTextArea(5,30);
 		newText.setText(text);
+		//Clear template for next file if it was used
+		textTemplateFile = null;
 		//Set it in a scroll pane
 		JScrollPane scrollWindow = new JScrollPane(newText);
 		scrollWindow.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
@@ -318,16 +336,19 @@ public class NotesExtensionOperations{
 		newText.setBounds(tabbedPane.getBounds());
 		//Mark the tab as a TEXT tab
 		tabTypes.put(name, "TEXT");
+		tabList.addItem(name);
 		tabbedPane.addTab(name, scrollWindow);
-		tabbedPane.setTabComponentAt(tabbedPane.getTabCount() - 1, new ButtonTabComponent(tabbedPane));
+		tabbedPane.setTabComponentAt(tabbedPane.getTabCount() - 1, new ButtonTabComponent(tabbedPane, this));
 		
 	}
 	
 	/**
 	 * Add a new blank spreadsheet to the Tabbed Pane. Will prompt the user for a name.
 	 */
-	public void AddSpreadsheetTab(){
-		AddSpreadsheetTab(null);
+	public void AddSpreadsheetTab(boolean importFile){
+		if(importFile) promptUseTemplate(TEMPLATE_SPREADSHEET);
+		if(spreadsheetTemplateFile != null) AddSpreadsheetTab(spreadsheetTemplateFile);
+		else AddSpreadsheetTab(null);
 	}
 	
 	/**
@@ -373,8 +394,12 @@ public class NotesExtensionOperations{
 		
 		//Set this tab as a spreadsheet
 		tabTypes.put(name, "SPREADSHEET");
+		tabList.addItem(name);
 		tabbedPane.addTab(name, scrollWindow);
-		tabbedPane.setTabComponentAt(tabbedPane.getTabCount() - 1, new ButtonTabComponent(tabbedPane));
+		tabbedPane.setTabComponentAt(tabbedPane.getTabCount() - 1, new ButtonTabComponent(tabbedPane, this));
+
+		//Make sure the template is null at this point for the next new tab
+		spreadsheetTemplateFile = null;
 	}
 
 	/**
@@ -401,9 +426,161 @@ public class NotesExtensionOperations{
 		String newName = "";
 		while(newName == "" || tabTypes.containsKey(newName))
 		{
-			newName = JOptionPane.showInputDialog("Please enter a unique name for the document:");
+			newName = JOptionPane.showInputDialog(tabbedPane, "Please enter a unique name for the document:");
 		}
 		return newName;
+	}
+	
+	/**
+	 * Prompt the user to choose a template file for a new spreadsheet.
+	 * @return The name entered by the user.
+	 */
+	public void promptUseTemplate(int templateType){
+		//Pick a file to import and fill in a new tab
+		File file;
+		try {
+			if(templateType == TEMPLATE_TEXT){
+				if((file = GetFileFromDialog(false, "TEMPLATE.txt")) != null){
+					textTemplateFile = "";
+					if(file.exists() && file.isFile() && file.canRead()){
+						FileReader input = new FileReader(file);
+						BufferedReader br = new BufferedReader(input);
+						String strLine;
+						//Read File Line By Line
+						while ((strLine = br.readLine()) != null)   {
+						  // Print the content on the console
+						  textTemplateFile += strLine + "\n";
+						}
+						//Close the input stream
+						br.close();
+					}
+				}
+			} else if(templateType == TEMPLATE_SPREADSHEET){
+				if((file = GetFileFromDialog(false, "TEMPLATE.csv")) != null){
+					spreadsheetTemplateFile = new ArrayList<String[]>();
+					if(file.exists() && file.isFile() && file.canRead()){
+						CSVReader reader = new CSVReader(new FileReader(file));
+						String[] nextLine;
+						while((nextLine = reader.readNext()) != null){
+							spreadsheetTemplateFile.add(nextLine);
+						}
+						reader.close();
+					}
+				}
+			}
+		} catch (IOException exc) {
+			errout.println(exc.getMessage());
+		}
+	}
+
+	/**
+	 * Remove the tab at the specified index
+	 * @param index The index of the tab to remove. 
+	 */
+	public void RemoveTab(int index){
+		Object[] options = {"OK", "Cancel"};
+		int n = JOptionPane.showOptionDialog(tabbedPane, "If you close this tab you will lose any unsaved data.", "Notes Tab", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE, null, options, options[0]);
+		if(n == JOptionPane.OK_OPTION){
+			String name = tabbedPane.getTitleAt(index);
+			tabList.removeItem(name);
+			tabTypes.remove(name);
+			tabbedPane.remove(index);
+		}
+	}
+
+	public void ClearAllTabs(){
+		Object[] options = {"Yes", "No"};
+		int n = JOptionPane.showOptionDialog(tabbedPane, "Do you want to clear all open tabs?", "Notes Tab", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null, options, options[0]);
+		if(n == JOptionPane.YES_OPTION){
+			for(int i = tabbedPane.getTabCount() - 1; i > 0; i--){
+				String name = tabbedPane.getTitleAt(i);
+				tabList.removeItem(name);
+				tabTypes.remove(name);
+				tabbedPane.remove(i);
+			}
+		}
+	}
+
+	/**
+	 * Save the content of the spreadsheet tab as a template CSV
+	 * @param index The index of the tab to save. 
+	 */
+	public void ExportTab(int index){
+		String name = tabbedPane.getTitleAt(index);
+		String type = tabTypes.get(name);
+		if(type == "SPREADSHEET"){
+			ExportSpreadsheetTab(index);
+		} else if(type == "TEXT"){
+			ExportTextTab(index);
+		}
+	}
+
+	public void ExportTextTab(int index){
+		//Text tab
+		JTextArea textTab = (JTextArea) GetInnerComponent(index);
+		
+		if(textTab != null){
+			//Text
+			String data = textTab.getText();
+
+			if(data != null ){
+				File f;
+				if((f = GetFileFromDialog(true, "TEMPLATE.txt")) != null){
+					try{
+						// Create file 
+						FileWriter fstream = new FileWriter(f);
+						BufferedWriter out = new BufferedWriter(fstream);
+						out.write(data);
+						//Close the output stream
+						out.close();
+					} catch (Exception exc){//Catch exception if any
+						errout.println(exc.getMessage());
+					}
+				}
+			}
+		}
+	}
+
+	public void ExportSpreadsheetTab(int index){
+		stdout.println("Exporting Tab Data");
+		//ArrayList to store data we will write out
+		ArrayList<String[]> data = new ArrayList<String[]>();
+		JTable table = (JTable) GetInnerComponent(index);
+		
+		if(table != null){
+			//Data
+			int numColumns = table.getColumnCount();
+			String[] row;
+			// Write cell data
+			for(int i=0;i<table.getRowCount();i++)
+			{
+				row = new String[numColumns];
+			    for(int j=0; j< table.getColumnCount();j++)
+			    {
+			    		row[j] = (String)table.getModel().getValueAt(i, j);
+			    }
+				data.add(row);
+			}
+
+			if(data.size() > 0) {
+				File f;
+				if((f = GetFileFromDialog(true, "TEMPLATE.csv")) != null){
+					try{
+						//Create our various Writers
+						FileWriter fw = new FileWriter(f);
+						CSVWriter writer = new CSVWriter(fw);
+						//Write out to file and close
+						writer.writeAll(data);
+						writer.close();
+						fw.close();
+					} catch(IOException exc){
+						errout.println(exc.getMessage());
+					} 
+				}
+			} else {
+				//No notes could be found
+			}
+		}
 	}
 	
 	//CONTEXT MENU OPERATIONS
@@ -481,14 +658,24 @@ public class NotesExtensionOperations{
 	 */
 	public void ParseAction(String cmd){
 		if(cmd.equals(COMMAND_ADD_TEXT)){
-			AddTextTab();
+			AddTextTab(false);
 		} else if(cmd.equals(COMMAND_ADD_SPREADSHEET)){
-			AddSpreadsheetTab();
+			AddSpreadsheetTab(false);
+		} else if(cmd.equals(COMMAND_IMPORT_TEXT)){
+			AddTextTab(true);
+		} else if(cmd.equals(COMMAND_IMPORT_SPREADSHEET)){
+			AddSpreadsheetTab(true);
 		} else if(cmd.equals(COMMAND_SAVE_NOTES)){
 			SaveNotes();
 		} else if(cmd.equals(COMMAND_LOAD_NOTES)){
+			if(tabbedPane.getTabCount() > 1) ClearAllTabs();
 			LoadNotes();
-		} else {
+		} else if(cmd.equals(COMMAND_SAVE_TAB_AS_TEMPLATE)){
+			if(tabList.getSelectedIndex() > 0) ExportTab(tabList.getSelectedIndex());
+		} else if(cmd.equals(COMMAND_REMOVE_TAB)){
+			if(tabList.getSelectedIndex() > 0) RemoveTab(tabList.getSelectedIndex());
+		}
+		else {
 			ParseConCommand(cmd);
 		}
 	}

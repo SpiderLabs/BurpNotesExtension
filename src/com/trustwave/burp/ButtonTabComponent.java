@@ -50,14 +50,16 @@ import java.awt.event.*;
 @SuppressWarnings("serial")
 public class ButtonTabComponent extends JPanel {
     private final JTabbedPane pane;
+    private final NotesExtensionOperations ops;
  
-    public ButtonTabComponent(final JTabbedPane pane) {
+    public ButtonTabComponent(final JTabbedPane pane, final NotesExtensionOperations ops) {
         //unset default FlowLayout' gaps
         super(new FlowLayout(FlowLayout.LEFT, 0, 0));
         if (pane == null) {
             throw new NullPointerException("TabbedPane is null");
         }
         this.pane = pane;
+        this.ops = ops;
         setOpaque(false);
          
         //make JLabel read titles from JTabbedPane
@@ -105,11 +107,7 @@ public class ButtonTabComponent extends JPanel {
         public void actionPerformed(ActionEvent e) {
             int i = pane.indexOfTabComponent(ButtonTabComponent.this);
             if (i != -1) {
-            	Object[] options = {"OK", "Cancel"};
-    			int n = JOptionPane.showOptionDialog(pane, "If you close this tab you will lose any unsaved data.", "Notes Tab", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE, null, options, options[0]);
-    			if(n == JOptionPane.OK_OPTION){
-                    pane.remove(i);
-    			}
+                ops.RemoveTab(i);
             }
         }
  
