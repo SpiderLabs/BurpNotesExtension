@@ -30,6 +30,7 @@ import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
+import javax.swing.JPanel;
 import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
@@ -49,6 +50,7 @@ public class NotesExtensionOperations{
 	public IBurpExtenderCallbacks callbacks;
     public IExtensionHelpers helpers;
     public PrintWriter stdout, errout;
+    public JPanel mainPanel, menuPanel;
     public JTabbedPane tabbedPane;
     public JComboBox tabList;
     public JButton btnAddText, btnAddSpreadsheet, btnImportText, btnImportSpreadsheet, btnLoadNotes, btnSaveNotes, btnSaveTabAsTemplate, btnRemoveTab;
@@ -57,6 +59,7 @@ public class NotesExtensionOperations{
     public byte selectedContext;
     public ArrayList<String[]> spreadsheetTemplateFile;
     public String textTemplateFile;
+    public File currentNotesFile;
 
     //KEYWORDS
     public static final String COMMAND_ADD_TEXT = "addText";
@@ -123,7 +126,8 @@ public class NotesExtensionOperations{
 		ArrayList<String[]> data = GetNotesData();
 		if(data.size() > 0) {
 			File f;
-			if((f = GetFileFromDialog(true, "notes.txt")) != null){
+			if((f = GetFileFromDialog(true, (currentNotesFile != null ? currentNotesFile.getPath() : "notes.txt"))) != null){
+				currentNotesFile = f; //Remember the file location 
 				try{
 					//Create our various Writers
 					FileWriter fw = new FileWriter(f);
@@ -148,7 +152,8 @@ public class NotesExtensionOperations{
 		//Now pick file to load
 		File file;
 		try {
-			if((file = GetFileFromDialog(false, "")) != null){
+			if((file = GetFileFromDialog(false, (currentNotesFile != null ? currentNotesFile.getPath() : ""))) != null){
+				currentNotesFile = file; //Remember the file just opened for saving later
 				ArrayList<String[]> spreadData = new ArrayList<String[]>();
 				if(file.exists() && file.isFile() && file.canRead()){
 						CSVReader reader = new CSVReader(new FileReader(file));
@@ -176,7 +181,7 @@ public class NotesExtensionOperations{
 		//ArrayList to store data we will write out
 		ArrayList<String[]> allElements = new ArrayList<String[]>();
 
-		for(int tab = 1; tab < tabbedPane.getTabCount(); tab++){ //Skip the Main tab
+		for(int tab = 0; tab < tabbedPane.getTabCount(); tab++){ 
 			String tabName = tabbedPane.getTitleAt(tab);
 			//Check each tab name against our tab types list to determine how we will write it to the file
 			if(tabTypes.get(tabName) == "TEXT"){
@@ -408,7 +413,7 @@ public class NotesExtensionOperations{
 	 * @return The index of a matching Tab or -1 if no matches are found.
 	 */
 	public int FindTabByName(String name){
-		for(int i = 1; i < tabbedPane.getTabCount(); i++){
+		for(int i = 0; i < tabbedPane.getTabCount(); i++){
 			//Look for the tab with a name matching the selected document
 			if(tabbedPane.getTitleAt(i).equals(name)){
 				return i;
@@ -424,7 +429,7 @@ public class NotesExtensionOperations{
 	 */
 	public String getTabName(){
 		String newName = "";
-		while(newName == "" || tabTypes.containsKey(newName))
+		while(newName.replaceAll("\\s", "").length() == 0 || tabTypes.containsKey(newName))
 		{
 			newName = JOptionPane.showInputDialog(tabbedPane, "Please enter a unique name for the document:");
 		}
@@ -492,7 +497,7 @@ public class NotesExtensionOperations{
 		Object[] options = {"Yes", "No"};
 		int n = JOptionPane.showOptionDialog(tabbedPane, "Do you want to clear all open tabs?", "Notes Tab", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null, options, options[0]);
 		if(n == JOptionPane.YES_OPTION){
-			for(int i = tabbedPane.getTabCount() - 1; i > 0; i--){
+			for(int i = tabbedPane.getTabCount() - 1; i >=0; i--){
 				String name = tabbedPane.getTitleAt(i);
 				tabList.removeItem(name);
 				tabTypes.remove(name);
@@ -668,12 +673,12 @@ public class NotesExtensionOperations{
 		} else if(cmd.equals(COMMAND_SAVE_NOTES)){
 			SaveNotes();
 		} else if(cmd.equals(COMMAND_LOAD_NOTES)){
-			if(tabbedPane.getTabCount() > 1) ClearAllTabs();
+			if(tabbedPane.getTabCount() > 0) ClearAllTabs();
 			LoadNotes();
 		} else if(cmd.equals(COMMAND_SAVE_TAB_AS_TEMPLATE)){
-			if(tabList.getSelectedIndex() > 0) ExportTab(tabList.getSelectedIndex());
+			if(tabbedPane.getTabCount() > 0) ExportTab(tabbedPane.getSelectedIndex());
 		} else if(cmd.equals(COMMAND_REMOVE_TAB)){
-			if(tabList.getSelectedIndex() > 0) RemoveTab(tabList.getSelectedIndex());
+			//if(tabList.getSelectedIndex() > 0) RemoveTab(tabList.getSelectedIndex());
 		}
 		else {
 			ParseConCommand(cmd);
