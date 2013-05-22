@@ -611,7 +611,7 @@ public class NotesExtensionOperations{
 			//Send request/response a new text document 
 			main.add(CreateMenuItem("New Text Document", "CON|" + NotesExtensionOperations.COMMAND_ADD_NEW_TEXT, listener));
 			//Send request/response to an existing document
-			for(int i = 1; i < tabbedPane.getTabCount(); i++){
+			for(int i = 0; i < tabbedPane.getTabCount(); i++){
 				if(tabTypes.get(tabbedPane.getTitleAt(i)) == "TEXT"){
 					String docName = tabbedPane.getTitleAt(i);
 					main.add(CreateMenuItem(docName, "CON|" + docName, listener));
@@ -628,7 +628,7 @@ public class NotesExtensionOperations{
 				main.add(NotesExtensionOperations.CreateMenuItem("New Text Document (Request)", "REQ|newTextDoc", listener));
 				main.add(NotesExtensionOperations.CreateMenuItem("New Text Document (Response)", "RES|newTextDoc", listener));
 				//Iterate through all open text documents, add a Request and Response option for each
-				for(int i = 1; i < tabbedPane.getTabCount(); i++){
+				for(int i = 0; i < tabbedPane.getTabCount(); i++){
 					if(tabTypes.get(tabbedPane.getTitleAt(i)) == "TEXT"){
 						String docName = tabbedPane.getTitleAt(i);
 						main.add(NotesExtensionOperations.CreateMenuItem(docName + " (Request)", "REQ|" + docName, listener));
@@ -711,7 +711,7 @@ public class NotesExtensionOperations{
 					if(getReq) fullText += helpers.bytesToString(rr.getRequest());
 					else fullText += helpers.bytesToString(rr.getResponse());
 				}
-				if(cmd.equals(COMMAND_ADD_NEW_TEXT)){
+				if(command[1].equals(COMMAND_ADD_NEW_TEXT)){
 					//We are adding a new document to the tab
 					AddTextTab(fullText);
 				} else if(tabTypes.containsKey(command[1])){
