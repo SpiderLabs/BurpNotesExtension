@@ -173,7 +173,7 @@ public class BurpExtender implements IBurpExtender, ITab, ActionListener, IExten
 		//Unloading extension, prompt user to save data if they have any tabs
 		if(ops.tabbedPane.getTabCount() > 0){
 			Object[] options = {"Yes", "No"};
-			int n = JOptionPane.showOptionDialog(ops.tabbedPane, "Would you like to save your notes?", "Notes Tab", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+			int n = JOptionPane.showOptionDialog(ops.mainPanel.getParent(), "Would you like to save your notes?", "Notes Tab", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
 			if(n == JOptionPane.YES_OPTION){
 				ops.SaveNotes();
 			}

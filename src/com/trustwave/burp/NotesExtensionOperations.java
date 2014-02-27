@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JMenu;
@@ -41,6 +42,8 @@ import burp.IBurpExtenderCallbacks;
 import burp.IContextMenuInvocation;
 import burp.IExtensionHelpers;
 import burp.IHttpRequestResponse;
+import burp.IHttpRequestResponseWithMarkers;
+import burp.IScanIssue;
 
 import au.com.bytecode.opencsv.CSVReader;
 import au.com.bytecode.opencsv.CSVWriter;
@@ -56,6 +59,7 @@ public class NotesExtensionOperations{
     public JButton btnAddText, btnAddSpreadsheet, btnImportText, btnImportSpreadsheet, btnLoadNotes, btnSaveNotes, btnSaveTabAsTemplate, btnRemoveTab;
     public HashMap<String,String> tabTypes;
     public IHttpRequestResponse[] messages;
+    public IScanIssue[] issues;
     public byte selectedContext;
     public ArrayList<String[]> spreadsheetTemplateFile;
     public String textTemplateFile;
@@ -71,6 +75,7 @@ public class NotesExtensionOperations{
     public static final String COMMAND_ADD_NEW_TEXT = "newTextDoc";
     public static final String COMMAND_SAVE_TAB_AS_TEMPLATE = "saveTabAsTemplate";
     public static final String COMMAND_REMOVE_TAB = "removeTab";
+    public static final String FILE_SAVE_SETTING = "lastSaveLocation";
     public static final int TEMPLATE_TEXT = 1;
     public static final int TEMPLATE_SPREADSHEET = 2;
     
@@ -82,6 +87,8 @@ public class NotesExtensionOperations{
     public NotesExtensionOperations(IBurpExtenderCallbacks Callbacks){
     	this.callbacks = Callbacks;
     	this.helpers = callbacks.getHelpers();
+    	//String lastPath = callbacks.loadExtensionSetting(FILE_SAVE_SETTING); //Recall last saved path if it exists
+    	//if(lastPath != null) currentNotesFile = new File(lastPath); //If we have a previously used path, set current file in case user wants to reload it
     }
     
 	//FILE OPERATIONS
@@ -127,7 +134,8 @@ public class NotesExtensionOperations{
 		if(data.size() > 0) {
 			File f;
 			if((f = GetFileFromDialog(true, (currentNotesFile != null ? currentNotesFile.getPath() : "notes.txt"))) != null){
-				currentNotesFile = f; //Remember the file location 
+				currentNotesFile = f; //Remember the file location
+				//callbacks.saveExtensionSettings(FILE_SAVE_SETTING, currentNotesFile.getPath()); //Update save location in extension settings
 				try{
 					//Create our various Writers
 					FileWriter fw = new FileWriter(f);
@@ -431,7 +439,7 @@ public class NotesExtensionOperations{
 		String newName = "";
 		while(newName.replaceAll("\\s", "").length() == 0 || tabTypes.containsKey(newName))
 		{
-			newName = JOptionPane.showInputDialog(tabbedPane, "Please enter a unique name for the document:");
+			newName = JOptionPane.showInputDialog(mainPanel.getParent(), "Please enter a unique name for the document:");
 		}
 		return newName;
 	}
@@ -600,6 +608,7 @@ public class NotesExtensionOperations{
 		//Remember the context and message so when we go to the action listener we can see what was happening
 		selectedContext = invocation.getInvocationContext();
 		messages = invocation.getSelectedMessages();
+		issues = invocation.getSelectedIssues();
 		if(selectedContext == IContextMenuInvocation.CONTEXT_MESSAGE_EDITOR_REQUEST || 
 				selectedContext == IContextMenuInvocation.CONTEXT_MESSAGE_EDITOR_RESPONSE ||
 				selectedContext == IContextMenuInvocation.CONTEXT_MESSAGE_VIEWER_REQUEST ||
@@ -636,6 +645,21 @@ public class NotesExtensionOperations{
 					}
 				}
 				return menu;
+		} else if(selectedContext == IContextMenuInvocation.CONTEXT_SCANNER_RESULTS){
+			//Present each document, the context shows whether they selected response/request
+			List<JMenuItem> menu = new ArrayList<JMenuItem>();
+			JMenu main = new JMenu("Send to Notes");
+			menu.add(main);
+			//Send request/response a new text document 
+			main.add(CreateMenuItem("New Text Document", "SCAN|" + NotesExtensionOperations.COMMAND_ADD_NEW_TEXT, listener));
+			//Send request/response to an existing document
+			for(int i = 0; i < tabbedPane.getTabCount(); i++){
+				if(tabTypes.get(tabbedPane.getTitleAt(i)) == "TEXT"){
+					String docName = tabbedPane.getTitleAt(i);
+					main.add(CreateMenuItem(docName, "SCAN|" + docName, listener));
+				}
+			}
+			return menu;
 		}
 
 		//No contexts we care about, don't return a menu option
@@ -701,6 +725,57 @@ public class NotesExtensionOperations{
 			} else if(command[0].equals("REQ")){
 				//Copy the request
 				getReq = true;
+			} else if(command[0].equals("SCAN") && issues != null){
+				//Prompt user to select details they want for the selected issues
+				//Asking once for all selected issues, rather than prompting over and over
+				JCheckBox chkName = new JCheckBox("Issue Name", true);
+				JCheckBox chkIssueDetail = new JCheckBox("Issue Detail", true);
+				JCheckBox chkIssueBack = new JCheckBox("Issue Background", true);
+				JCheckBox chkIssueType = new JCheckBox("Issue Type", true);
+				JCheckBox chkRemBack = new JCheckBox("Remediation Background", true);
+				JCheckBox chkRemDetail = new JCheckBox("Remediation Detail", true);
+				JCheckBox chkUrl = new JCheckBox("Issue URL", true);
+				String msg = "Please select details to include:";
+				Object[] msgContent = {msg, chkName, chkIssueDetail, chkIssueBack, chkIssueType, chkRemBack, chkRemDetail, chkUrl };
+				int n = JOptionPane.showConfirmDialog (mainPanel.getParent(), msgContent, "Select Details", JOptionPane.OK_CANCEL_OPTION);
+
+				for(int i = 0; i < issues.length; i++){
+					IScanIssue issue = issues[i];
+					//Go through each issue and output relevant details
+					String fullText = "";
+					if(chkName.isSelected()) fullText += issue.getIssueName() + "\n";
+					if(chkIssueDetail.isSelected()) fullText += issue.getIssueDetail() + "\n";
+					if(chkIssueBack.isSelected()) fullText += issue.getIssueBackground() + "\n";
+					if(chkIssueType.isSelected()) fullText += issue.getIssueType() + "\n";
+					if(chkRemBack.isSelected()) fullText += issue.getRemediationBackground() + "\n";
+					if(chkRemDetail.isSelected()) fullText += issue.getRemediationDetail() + "\n";
+					if(chkUrl.isSelected()) fullText += issue.getUrl() + "\n";
+
+					if(command[1].equals(COMMAND_ADD_NEW_TEXT)){
+						//We are adding a new document to the tab
+						AddTextTab(fullText);
+					} else if(tabTypes.containsKey(command[1])){
+						//We are adding the messages to an existing document
+						int numTab = FindTabByName(command[1]);
+						JTextArea textTab = (JTextArea) GetInnerComponent(numTab);
+						String origText = textTab.getText();
+						textTab.setText(origText + "\n" + fullText);
+					}
+					/* //Leaving this block for later when I decide if I want to extract the vulnerable parameter name, if applicable to the issue
+					//Not directly exposed by API, instead it will have to be extracted working back from included markers
+					IHttpRequestResponseWithMarkers[] scanIssues = (IHttpRequestResponseWithMarkers[])issue.getHttpMessages();
+					for(int j = 0; j < scanIssues.length; j++){
+						IHttpRequestResponseWithMarkers curIssue = (IHttpRequestResponseWithMarkers) scanIssues[j];
+						List<int[]> markers = curIssue.getRequestMarkers();
+						String markedRequest = helpers.bytesToString(curIssue.getRequest());
+						for(int k = 0; k < markers.size(); k++){
+							int[] marker = markers.get(k);
+							stdout.println(markedRequest.substring(marker[0],marker[1]));
+							stdout.println(marker[0]);
+							stdout.println(marker[1]);
+						}
+					} */
+				}
 			}
 			//If getReq == false, we are grabbing the response
 			if(messages != null){
@@ -723,6 +798,7 @@ public class NotesExtensionOperations{
 				}
 			}
 			messages = null; //Clear it out once we are done
+			issues = null;
 			selectedContext = Byte.MIN_VALUE;
 		}
 	}
